@@ -1,4 +1,4 @@
-use std::{any::TypeId, marker::PhantomData, ptr::NonNull};
+use std::{any::TypeId, marker::PhantomData};
 
 use bytemuck::Zeroable;
 use cfg_if::cfg_if;
@@ -76,7 +76,7 @@ pub mod private {
                         symbol = sym inline_cache_id::<T, K>,
                         options(pure, nomem, preserves_flags, nostack),
                     );
-                    NonNull::new_unchecked(slot_ptr).as_ref()
+                    &*slot_ptr
                 }
             }
         };
