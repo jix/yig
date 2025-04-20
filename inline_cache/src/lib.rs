@@ -111,7 +111,12 @@ pub mod private {
                 mod fallback_rwlock;
                 mod identity_hasher;
             }
-        } else if #[cfg(all(target_arch = "x86_64", target_os = "linux"))] {
+        } else if #[cfg(
+            all(
+                target_arch = "x86_64",
+                any(target_os = "linux", target_os = "macos"),
+            )
+        )] {
             type_cache_impl! {
                 align = bytes,
                 "mov {slot}, [rip + {symbol}_SLOT@GOTPCREL]",
@@ -126,6 +131,12 @@ pub mod private {
                 align = bytes,
                 "adrp {slot}, :got:{symbol}_SLOT",
                 "ldr {slot}, [{slot}, :got_lo12:{symbol}_SLOT]",
+            }
+        } else if #[cfg(all(target_arch = "aarch64", target_os = "macos"))] {
+            type_cache_impl! {
+                align = bytes,
+                "adrp {slot}, {symbol}_SLOT@GOTPAGE",
+                "ldr {slot}, [{slot}, {symbol}_SLOT@GOTPAGEOFF]",
             }
         } else if #[cfg(any(target_arch = "wasm32", target_arch = "wasm64"))] {
             type_cache_impl! {
