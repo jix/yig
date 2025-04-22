@@ -66,3 +66,49 @@ impl<T: ?Sized> Arc<T> {
     }
 }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Mutex;
+
+    use super::*;
+
+    #[test]
+    fn test_arc() {
+        #[derive(PartialEq, Eq, Debug)]
+        enum Action {
+            Created(usize),
+            Dropped(usize),
+        }
+        use Action::*;
+
+        struct Logging<'a>(&'a Mutex<Vec<Action>>, usize);
+
+        impl<'a> Logging<'a> {
+            pub fn new(log: &'a Mutex<Vec<Action>>, id: usize) -> Self {
+                log.lock().unwrap().push(Action::Created(id));
+                Self(log, id)
+            }
+        }
+
+        impl<'a> Drop for Logging<'a> {
+            fn drop(&mut self) {
+                self.0.lock().unwrap().push(Action::Dropped(self.1))
+            }
+        }
+
+        let log: Mutex<Vec<Action>> = Mutex::new(vec![]);
+
+        let a = Arc::new(Logging::new(&log, 0));
+        let b = Arc::new(Logging::new(&log, 1));
+        let c = a.clone();
+        drop(a);
+        drop(b);
+        drop(c);
+
+        assert_eq!(
+            log.into_inner().unwrap(),
+            vec![Created(0), Created(1), Dropped(1), Dropped(0)]
+        );
+    }
+}
