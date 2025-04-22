@@ -106,7 +106,7 @@ pub mod private {
     }
 
     cfg_if! {
-        if #[cfg(feature = "force_fallback_impl")] {
+        if #[cfg(any(feature = "force_fallback_impl", miri))] {
             type_cache_impl! {
                 mod fallback_rwlock;
                 mod identity_hasher;
@@ -206,6 +206,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn huge() {
         fn huge0<T>(i: usize) -> bool {
             inline_cache!(AtomicUsize, T).fetch_add(1, Relaxed) == i
