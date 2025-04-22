@@ -3,6 +3,10 @@
 version = 4
 
 [[package]]
+name = "arcane"
+version = "0.1.0"
+
+[[package]]
 name = "bytemuck"
 version = "1.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
