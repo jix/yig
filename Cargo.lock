@@ -5,6 +5,11 @@ version = 4
 [[package]]
 name = "arcane"
 version = "0.1.0"
+dependencies = [
+ "generic_singleton",
+ "hashbrown",
+ "zwohash",
+]
 
 [[package]]
 name = "bytemuck"
@@ -27,9 +32,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "hashbrown"
+version = "0.15.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf151400ff0baff5465007dd2f3e717f3fe502074ca563069ce3a6629d07b289"
+
+[[package]]
 name = "inline_cache"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
  "cfg-if",
 ]
+
+[[package]]
+name = "zwohash"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "beaf63e0740cea93ca85de39611a8bc8262a50adacd6321cd209a123676d0447"

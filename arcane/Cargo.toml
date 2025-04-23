@@ -4,3 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+generic_singleton = { version = "0.1.0", path = "../generic_singleton" }
+hashbrown = { version = "0.15.2", default-features = false }
+zwohash = "0.1.2"
