@@ -5,3 +5,6 @@ edition = "2024"
 
 [dependencies]
 arcane = { version = "0.1.0", path = "../arcane" }
+
+[dev-dependencies]
+zwohash = "0.1.2"

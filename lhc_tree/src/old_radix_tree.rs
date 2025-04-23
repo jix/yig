@@ -1,7 +1,6 @@
 use std::{hash::Hash, mem::take, sync::atomic::AtomicUsize};
 
-use arcane::{arc::UniqueArc, dedup::DedupArc};
-
+use arcane::{arc::UniqueArc, dedup::DedupArc, once::ArcOnce};
 
 const LEAF_BITS: u32 = 6;
 const LEAF_SIZE: usize = 1 << LEAF_BITS;
@@ -81,7 +80,7 @@ impl<T: Send + Sync + Hash + Eq + 'static + Clone> SharedNodeRef<T> {
             SharedNodeRef::Leaf(leaf) => OwnedNodeRef::Leaf(UniqueArc::new((**leaf).clone())),
             SharedNodeRef::Inner(inner) => OwnedNodeRef::Inner(UniqueArc::new(OwnedInner {
                 len: LazyLen(inner.len.into()),
-                shared: DedupArcOnce::pending(),
+                shared: ArcOnce::default(),
                 children: std::array::from_fn(|i| {
                     inner.children[i]
                         .as_ref()
@@ -113,7 +112,7 @@ impl LazyLen {
 #[derive(Debug)]
 struct OwnedInner<T: Send + Sync + Hash + Eq + 'static> {
     len: LazyLen,
-    shared: DedupArcOnce<SharedInner<T>>,
+    shared: ArcOnce<DedupArc<SharedInner<T>>>,
     children: [Option<OwnedNodeRef<T>>; INNER_SIZE],
 }
 
@@ -282,7 +281,7 @@ impl<T: Send + Sync + Hash + Eq + 'static + Clone> OwnedRoot<T> {
 
             let mut inner = UniqueArc::new(OwnedInner {
                 len: LazyLen::unknown(),
-                shared: DedupArcOnce::pending(),
+                shared: ArcOnce::default(),
                 children: std::array::from_fn(|_| None),
             });
 
@@ -331,7 +330,7 @@ impl<T: Send + Sync + Hash + Eq + 'static + Clone> OwnedRoot<T> {
 impl<T: Send + Sync + Hash + Eq + 'static + Clone> OwnedInner<T> {
     fn modify(&mut self) {
         self.len = LazyLen::unknown();
-        self.shared = DedupArcOnce::pending();
+        self.shared = ArcOnce::default();
     }
 }
 
@@ -345,7 +344,7 @@ impl<T: Send + Sync + Hash + Eq + 'static + Clone> OwnedNodeRef<T> {
         } else {
             OwnedNodeRef::Inner(UniqueArc::new(OwnedInner {
                 len: LazyLen::unknown(),
-                shared: DedupArcOnce::pending(),
+                shared: ArcOnce::default(),
                 children: std::array::from_fn(|_| None),
             }))
         }
@@ -357,7 +356,7 @@ impl<T: Send + Sync + Hash + Eq + 'static + Clone> OwnedNodeRef<T> {
             OwnedNodeRef::Leaf(leaf) => SharedNodeRef::Leaf(DedupArc::from(leaf)),
             OwnedNodeRef::Inner(mut inner) => {
                 if let Some(shared) = inner.shared.get() {
-                    SharedNodeRef::Inner(shared.clone_arc())
+                    SharedNodeRef::Inner(shared.clone())
                 } else {
                     let mut len = 0;
                     SharedNodeRef::Inner(DedupArc::new(SharedInner {
@@ -396,7 +395,7 @@ impl<T: Send + Sync + Hash + Eq + 'static + Clone> OwnedNodeRef<T> {
             OwnedNodeRef::Leaf(leaf) => SharedNodeRef::Leaf(DedupArc::new((*leaf).clone())),
             OwnedNodeRef::Inner(inner) => {
                 if let Some(gotten) = inner.shared.get() {
-                    SharedNodeRef::Inner(gotten.clone_arc())
+                    SharedNodeRef::Inner(gotten.clone())
                 } else {
                     let mut len = 0;
                     let shared = DedupArc::new(SharedInner {
@@ -409,7 +408,7 @@ impl<T: Send + Sync + Hash + Eq + 'static + Clone> OwnedNodeRef<T> {
                         }),
                         len,
                     });
-                    inner.shared.provide(shared.clone());
+                    inner.shared.set(shared.clone());
                     SharedNodeRef::Inner(shared)
                 }
             }
@@ -541,9 +540,19 @@ mod tests {
         // println!("{:?}", memory_stats::memory_stats());
     }
 
-    const SCALE: usize = 1_000;
-    const SCANS: usize = 1000;
+    #[cfg(miri)]
+    const SCALE: usize = 1_00;
+    #[cfg(miri)]
+    const SCANS: usize = 10;
+    #[cfg(miri)]
     const MASK: usize = 0x3;
+
+    #[cfg(not(miri))]
+    const SCALE: usize = 10_000;
+    #[cfg(not(miri))]
+    const SCANS: usize = 100;
+    #[cfg(not(miri))]
+    const MASK: usize = 0xff;
 
     #[test]
     fn testthis() {
@@ -561,9 +570,8 @@ mod tests {
             let mut current = 0;
 
             for i in 0..SCALE {
-                let next =
-                    (foo[j + 1].get(current).copied().unwrap_or_default() + i * j) % SCALE;
-                if (next ^ i) & MASK == 0 {
+                let next = (foo[j + 1].get(current).copied().unwrap_or_default() + i * j) % SCALE;
+                if next & MASK == 0 {
                     foo[j + 1].insert(current, (!next) % SCALE);
                     replacements += 1;
                 }
@@ -571,6 +579,12 @@ mod tests {
             }
 
             total += current;
+        }
+
+        for j in 0..SCANS {
+            for i in 0..SCALE {
+                total += foo[j].get(i).copied().unwrap_or_default();
+            }
         }
 
         memstats();
@@ -595,8 +609,7 @@ mod tests {
             let mut current = 0;
 
             for i in 0..SCALE {
-                let next =
-                    (foo[j + 1].get(current).copied().unwrap_or_default() + i * j) % SCALE;
+                let next = (foo[j + 1].get(current).copied().unwrap_or_default() + i * j) % SCALE;
                 if next & MASK == 0 {
                     foo[j + 1][current] = (!next) % SCALE;
                     replacements += 1;
@@ -605,6 +618,12 @@ mod tests {
             }
 
             total += current;
+        }
+
+        for j in 0..SCANS {
+            for i in 0..SCALE {
+                total += foo[j].get(i).copied().unwrap_or_default();
+            }
         }
 
         memstats();
@@ -629,8 +648,7 @@ mod tests {
             let mut current = 0;
 
             for i in 0..SCALE {
-                let next =
-                    (foo[j + 1].get(&current).copied().unwrap_or_default() + i * j) % SCALE;
+                let next = (foo[j + 1].get(&current).copied().unwrap_or_default() + i * j) % SCALE;
                 if next & MASK == 0 {
                     foo[j + 1].insert(current, (!next) % SCALE);
                     replacements += 1;
@@ -639,6 +657,12 @@ mod tests {
             }
 
             total += current;
+        }
+
+        for j in 0..SCANS {
+            for i in 0..SCALE {
+                total += foo[j].get(&i).copied().unwrap_or_default();
+            }
         }
 
         memstats();
@@ -663,8 +687,7 @@ mod tests {
             let mut current = 0;
 
             for i in 0..SCALE {
-                let next =
-                    (foo[j + 1].get(&current).copied().unwrap_or_default() + i * j) % SCALE;
+                let next = (foo[j + 1].get(&current).copied().unwrap_or_default() + i * j) % SCALE;
                 if next & MASK == 0 {
                     foo[j + 1].insert(current, (!next) % SCALE);
                     replacements += 1;
@@ -673,6 +696,12 @@ mod tests {
             }
 
             total += current;
+        }
+
+        for j in 0..SCANS {
+            for i in 0..SCALE {
+                total += foo[j].get(&i).copied().unwrap_or_default();
+            }
         }
 
         memstats();
