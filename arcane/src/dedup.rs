@@ -1,7 +1,7 @@
 use std::{
     hash::{BuildHasher, BuildHasherDefault, Hash},
     marker::PhantomData,
-    mem::ManuallyDrop,
+    ops::Deref,
     pin::Pin,
     process::abort,
     ptr::NonNull,
@@ -107,6 +107,40 @@ impl<T: Send + Sync + ?Sized + 'static, D: Dedup<T>> ArcVariant for DedupArc<T, 
                 ))),
             }
         }
+    }
+}
+
+impl<T: Send + Sync + ?Sized + 'static, D: Dedup<T>> Deref for DedupArc<T, D> {
+    type Target = T;
+
+    #[inline(always)]
+    fn deref(&self) -> &Self::Target {
+        &self.inner.inner
+    }
+}
+
+impl<T: Send + Sync + ?Sized + 'static, D: Dedup<T>> PartialEq for DedupArc<T, D> {
+    #[inline(always)]
+    fn eq(&self, other: &Self) -> bool {
+        ArcVariant::addr_eq(self, other)
+    }
+}
+
+impl<T: Send + Sync + ?Sized + 'static, D: Dedup<T>> Eq for DedupArc<T, D> {}
+
+impl<T: Send + Sync + ?Sized + 'static, D: Dedup<T>> Hash for DedupArc<T, D> {
+    #[inline(always)]
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        // TODO customizable
+        ArcVariant::as_arc_ptr(self).data_ptr().addr().hash(state);
+    }
+}
+
+impl<T: std::fmt::Debug + Send + Sync + ?Sized + 'static, D: Dedup<T>> std::fmt::Debug
+    for DedupArc<T, D>
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(&**self, f)
     }
 }
 
