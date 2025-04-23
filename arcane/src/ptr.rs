@@ -7,6 +7,21 @@ pub struct ArcPtr<T: ?Sized> {
     ptr: NonNull<T>,
 }
 
+pub trait ArcVariant {
+    type Target: ?Sized;
+    fn as_arc_ptr(this: &Self) -> ArcPtr<Self::Target>;
+    fn into_arc_ptr(this: Self) -> ArcPtr<Self::Target>;
+    unsafe fn from_arc_ptr(ptr: ArcPtr<Self::Target>) -> Self;
+
+    #[inline(always)]
+    fn addr_eq(this: &Self, other: &impl ArcVariant) -> bool {
+        ArcVariant::as_arc_ptr(this).data_ptr().addr()
+            == ArcVariant::as_arc_ptr(other).data_ptr().addr()
+    }
+}
+
+pub unsafe trait TransparentArcVariant: ArcVariant {}
+
 impl<T: ?Sized> Copy for ArcPtr<T> {}
 impl<T: ?Sized> Clone for ArcPtr<T> {
     #[inline(always)]

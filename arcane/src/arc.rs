@@ -1,9 +1,10 @@
 use std::{
     mem::ManuallyDrop,
     ops::{Deref, DerefMut},
+    ptr::NonNull,
 };
 
-use crate::ptr::ArcPtr;
+use crate::ptr::{ArcPtr, ArcVariant, TransparentArcVariant};
 
 #[repr(transparent)]
 pub struct Arc<T: ?Sized> {
@@ -12,6 +13,22 @@ pub struct Arc<T: ?Sized> {
 
 unsafe impl<T: Sync + Send + ?Sized> Sync for Arc<T> {}
 unsafe impl<T: Sync + Send + ?Sized> Send for Arc<T> {}
+
+unsafe impl<T: ?Sized> TransparentArcVariant for Arc<T> {}
+impl<T: ?Sized> ArcVariant for Arc<T> {
+    type Target = T;
+    fn as_arc_ptr(this: &Self) -> ArcPtr<T> {
+        this.ptr
+    }
+
+    fn into_arc_ptr(this: Self) -> ArcPtr<T> {
+        ManuallyDrop::new(this).ptr
+    }
+
+    unsafe fn from_arc_ptr(ptr: ArcPtr<T>) -> Self {
+        Self { ptr }
+    }
+}
 
 impl<T: ?Sized> Clone for Arc<T> {
     #[inline(always)]
@@ -52,21 +69,6 @@ impl<T: ?Sized> Arc<T> {
     pub fn ptr_eq<U: ?Sized>(lhs: &Self, rhs: Arc<U>) -> bool {
         std::ptr::addr_eq(lhs.ptr.data_ptr().as_ptr(), rhs.ptr.data_ptr().as_ptr())
     }
-
-    #[inline(always)]
-    pub fn into_arc_ptr(this: Self) -> ArcPtr<T> {
-        ManuallyDrop::new(this).ptr
-    }
-
-    #[inline(always)]
-    pub fn as_arc_ptr(this: &Self) -> ArcPtr<T> {
-        this.ptr
-    }
-
-    #[inline(always)]
-    pub unsafe fn from_arc_ptr(ptr: ArcPtr<T>) -> Self {
-        Self { ptr }
-    }
 }
 
 #[repr(transparent)]
@@ -76,6 +78,23 @@ pub struct UniqueArc<T: ?Sized> {
 
 unsafe impl<T: Sync + Send + ?Sized> Sync for UniqueArc<T> {}
 unsafe impl<T: Sync + Send + ?Sized> Send for UniqueArc<T> {}
+
+unsafe impl<T: ?Sized> TransparentArcVariant for UniqueArc<T> {}
+impl<T: ?Sized> ArcVariant for UniqueArc<T> {
+    type Target = T;
+
+    fn as_arc_ptr(this: &Self) -> ArcPtr<T> {
+        this.ptr
+    }
+
+    fn into_arc_ptr(this: Self) -> ArcPtr<T> {
+        ManuallyDrop::new(this).ptr
+    }
+
+    unsafe fn from_arc_ptr(ptr: ArcPtr<T>) -> Self {
+        Self { ptr }
+    }
+}
 
 impl<T: ?Sized> Drop for UniqueArc<T> {
     #[inline]
@@ -114,18 +133,6 @@ impl<T> UniqueArc<T> {
 
 impl<T: ?Sized> UniqueArc<T> {
     #[inline(always)]
-    pub fn into_arc_ptr(this: Self) -> ArcPtr<T> {
-        ManuallyDrop::new(this).ptr
-    }
-
-    #[inline(always)]
-    pub fn as_arc_ptr(this: &Self) -> ArcPtr<T> {
-        this.ptr
-    }
-
-    #[inline(always)]
-    pub unsafe fn from_arc_ptr(ptr: ArcPtr<T>) -> Self {
-        Self { ptr }
     }
 }
 
