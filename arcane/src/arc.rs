@@ -1,6 +1,7 @@
 use std::{
     mem::ManuallyDrop,
     ops::{Deref, DerefMut},
+    pin::Pin,
     ptr::NonNull,
 };
 
@@ -27,6 +28,23 @@ impl<T: ?Sized> ArcVariant for Arc<T> {
 
     unsafe fn from_arc_ptr(ptr: ArcPtr<T>) -> Self {
         Self { ptr }
+    }
+}
+
+unsafe impl<T: ?Sized> TransparentArcVariant for Pin<Arc<T>> {}
+impl<T: ?Sized> ArcVariant for Pin<Arc<T>> {
+    type Target = T;
+
+    fn as_arc_ptr(this: &Self) -> ArcPtr<T> {
+        unsafe { ArcVariant::as_arc_ptr(NonNull::from(this).cast::<Arc<T>>().as_ref()) }
+    }
+
+    fn into_arc_ptr(this: Self) -> ArcPtr<T> {
+        unsafe { ArcVariant::into_arc_ptr(Pin::into_inner_unchecked(this)) }
+    }
+
+    unsafe fn from_arc_ptr(ptr: ArcPtr<T>) -> Self {
+        unsafe { Pin::new_unchecked(<Arc<T>>::from_arc_ptr(ptr)) }
     }
 }
 
@@ -96,6 +114,23 @@ impl<T: ?Sized> ArcVariant for UniqueArc<T> {
     }
 }
 
+unsafe impl<T: ?Sized> TransparentArcVariant for Pin<UniqueArc<T>> {}
+impl<T: ?Sized> ArcVariant for Pin<UniqueArc<T>> {
+    type Target = T;
+
+    fn as_arc_ptr(this: &Self) -> ArcPtr<T> {
+        unsafe { ArcVariant::as_arc_ptr(NonNull::from(this).cast::<Arc<T>>().as_ref()) }
+    }
+
+    fn into_arc_ptr(this: Self) -> ArcPtr<T> {
+        unsafe { ArcVariant::into_arc_ptr(Pin::into_inner_unchecked(this)) }
+    }
+
+    unsafe fn from_arc_ptr(ptr: ArcPtr<T>) -> Self {
+        unsafe { Pin::new_unchecked(<UniqueArc<T>>::from_arc_ptr(ptr)) }
+    }
+}
+
 impl<T: ?Sized> Drop for UniqueArc<T> {
     #[inline]
     fn drop(&mut self) {
@@ -133,6 +168,8 @@ impl<T> UniqueArc<T> {
 
 impl<T: ?Sized> UniqueArc<T> {
     #[inline(always)]
+    pub fn into_pin(this: Self) -> Pin<Self> {
+        unsafe { Pin::new_unchecked(this) }
     }
 }
 
@@ -142,6 +179,13 @@ impl<T: ?Sized> From<UniqueArc<T>> for Arc<T> {
         Arc {
             ptr: UniqueArc::into_arc_ptr(value),
         }
+    }
+}
+
+impl<T: ?Sized> From<Pin<UniqueArc<T>>> for Pin<Arc<T>> {
+    #[inline(always)]
+    fn from(value: Pin<UniqueArc<T>>) -> Self {
+        unsafe { Pin::new_unchecked(<Arc<T>>::from(Pin::into_inner_unchecked(value))) }
     }
 }
 

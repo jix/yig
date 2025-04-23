@@ -1,6 +1,9 @@
-use std::{marker::PhantomData, ops::Deref, ptr::NonNull};
+use std::{marker::PhantomData, ops::Deref, pin::Pin, ptr::NonNull};
 
-use crate::{arc::Arc, ptr::ArcPtr};
+use crate::{
+    arc::Arc,
+    ptr::{ArcPtr, ArcVariant, TransparentArcVariant},
+};
 
 #[repr(transparent)]
 pub struct ArcBorrow<'a, T: ?Sized> {
@@ -19,6 +22,26 @@ impl<'a, T: ?Sized> Clone for ArcBorrow<'a, T> {
 // `Arc<T>`
 unsafe impl<T: Sync + Send + ?Sized> Sync for ArcBorrow<'_, T> {}
 unsafe impl<T: Sync + Send + ?Sized> Send for ArcBorrow<'_, T> {}
+
+unsafe impl<T: ?Sized> TransparentArcVariant for ArcBorrow<'_, T> {}
+impl<T: ?Sized> ArcVariant for ArcBorrow<'_, T> {
+    type Target = T;
+
+    fn as_arc_ptr(this: &Self) -> ArcPtr<T> {
+        this.ptr
+    }
+
+    fn into_arc_ptr(this: Self) -> ArcPtr<T> {
+        this.ptr
+    }
+
+    unsafe fn from_arc_ptr(ptr: ArcPtr<T>) -> Self {
+        Self {
+            ptr,
+            _phantom: PhantomData,
+        }
+    }
+}
 
 impl<T: ?Sized> Deref for ArcBorrow<'_, T> {
     type Target = Arc<T>;
@@ -47,8 +70,8 @@ impl<'a, T: ?Sized> ArcBorrow<'a, T> {
     }
 
     #[inline(always)]
-    pub unsafe fn from_arc_ptr(ptr: ArcPtr<T>) -> Self {
-        Self { ptr, _phantom: PhantomData }
+    pub fn clone_pinned_arc(this: Pin<Self>) -> Pin<Arc<T>> {
+        unsafe { Pin::new_unchecked(Self::clone_arc(Pin::into_inner_unchecked(this))) }
     }
 }
 
