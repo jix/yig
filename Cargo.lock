@@ -46,6 +46,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "lhc_tree"
+version = "0.1.0"
+dependencies = [
+ "arcane",
+]
+
+[[package]]
 name = "zwohash"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

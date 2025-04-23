@@ -1,0 +1,7 @@
+[package]
+name = "lhc_tree"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+arcane = { version = "0.1.0", path = "../arcane" }
