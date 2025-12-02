@@ -46,7 +46,7 @@ fn erased_type_id<T>() -> TypeId {
     let phantom: PhantomData<T> = PhantomData;
     let dyn_phantom: &dyn PhantomAny = &phantom;
     let dyn_static_phantom: &(dyn PhantomAny + 'static) =
-        unsafe { &*(dyn_phantom as *const _ as *const _) };
+        unsafe { std::mem::transmute(dyn_phantom) };
     PhantomAny::inner_type_id(dyn_static_phantom)
 }
 
